@@ -1,3 +1,3 @@
-# Criação da base de Monitoramento
+# 📊 Prog Generator (Automação de Base de Monitoramento)
 
-Sistema automatizado de tradução de base logistica em PDF para Excel.
+Prog Generator é uma ferramenta de automação focada em produtividade logística. O sistema extrai dados não-estruturados de arquivos PDF e os converte, de forma automatizada, em bases de monitoramento no formato Excel (.xlsx). Ideal para reduzir trabalho manual e acelerar a análise de dados logísticos.
