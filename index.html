@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Control Tower — Gerador de Programação</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark">CT</div>
+        <div>
+          <h1>Control Tower — Gerador de Programação</h1>
+          <p class="subtitle">Conversão automática de programação PDF para Excel</p>
+        </div>
+      </div>
+      <nav class="tabs">
+        <button type="button" class="tab-btn active" id="tabProcessarBtn" data-tab="processar">Processar PDF</button>
+        <button type="button" class="tab-btn" id="tabBaseBtn" data-tab="base">Base de CDs</button>
+        <button type="button" class="tab-btn" id="tabIntelBtn" data-tab="intel">Inteligência / Histórico</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" id="pageProcessar">
+
+    <section class="card">
+      <h2 class="card-title"><span class="step-num">1</span> Programação (PDF)</h2>
+
+      <div id="dropZone" class="dropzone" tabindex="0" role="button" aria-label="Selecionar arquivo PDF">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="drop-title">Arraste o PDF aqui</p>
+        <p class="drop-sub">ou <span class="link-like">selecionar PDF</span></p>
+        <input type="file" id="pdfInput" accept="application/pdf,.pdf" hidden />
+      </div>
+
+      <div id="fileInfo" class="file-info" hidden>
+        <div class="file-info-icon">PDF</div>
+        <div class="file-info-main">
+          <div id="fileName" class="file-info-name"></div>
+          <div id="fileSize" class="file-info-size"></div>
+        </div>
+        <button type="button" id="removeFileBtn" class="btn-icon" title="Remover arquivo">&times;</button>
+      </div>
+
+      <button type="button" id="btnProcessar" class="btn btn-primary" disabled>Processar programação</button>
+
+      <div id="progressSection" class="progress-section" hidden>
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        <div id="progressStatus" class="progress-status">Processando PDF...</div>
+        <div id="progressDetail" class="progress-detail"></div>
+      </div>
+    </section>
+
+    <section id="summarySection" class="card" hidden>
+      <h2 class="card-title">Resumo do processamento</h2>
+      <div class="summary-grid">
+        <div class="summary-item"><span class="summary-value" id="sumPages">0</span><span class="summary-label">Páginas processadas</span></div>
+        <div class="summary-item"><span class="summary-value" id="sumRecords">0</span><span class="summary-label">Registros encontrados</span></div>
+        <div class="summary-item summary-ok"><span class="summary-value" id="sumValid">0</span><span class="summary-label">Registros válidos</span></div>
+        <div class="summary-item summary-warn"><span class="summary-value" id="sumInvalid">0</span><span class="summary-label">Com inconsistências</span></div>
+        <div class="summary-item"><span class="summary-value" id="sumWarnings">0</span><span class="summary-label">Avisos</span></div>
+        <div class="summary-item summary-auto"><span class="summary-value" id="sumAutoReturns">0</span><span class="summary-label">Retornos criados</span></div>
+      </div>
+    </section>
+
+    <section id="issuesSection" class="card" hidden>
+      <h2 class="card-title">Validação</h2>
+      <div id="issuesList" class="issues-list"></div>
+    </section>
+
+    <section id="autoReturnSection" class="card" hidden>
+      <h2 class="card-title">Linhas de retorno criadas automaticamente</h2>
+      <p class="card-hint">
+        Rotas identificadas como operação Martin Brower (via Tipo de Veículo) com evidência histórica de
+        retorno ao CD. Essas linhas <strong>não vêm do PDF</strong> — foram inferidas a partir do histórico
+        importado. Confira o motivo de cada uma antes de gerar o Excel.
+      </p>
+      <div id="autoReturnList" class="issues-list"></div>
+    </section>
+
+    <section id="genSection" class="card" hidden>
+      <h2 class="card-title"><span class="step-num">2</span> Gerar Excel</h2>
+      <p class="card-hint">O sistema irá preencher o modelo de Excel preservando integralmente colunas, formatação e fórmulas — as colunas calculadas continuarão sendo fórmulas reais do Excel.</p>
+      <button type="button" id="btnGerar" class="btn btn-primary" disabled>Gerar Excel</button>
+      <div id="genStatus" class="gen-status" hidden></div>
+      <div id="downloadSection" class="download-section" hidden>
+        <div class="download-filename" id="downloadFileName"></div>
+        <button type="button" id="downloadBtn" class="btn btn-success">Baixar Excel</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <button type="button" id="advToggle" class="adv-toggle" aria-expanded="false">Configurações avançadas (modelo Excel, mapeamento de origem) ▼</button>
+      <div id="advPanel" class="adv-panel" hidden>
+
+        <div class="adv-block">
+          <h3>Modelo de Excel (opcional)</h3>
+          <p class="card-hint">Por padrão o sistema usa o modelo oficial já incorporado. Envie um arquivo apenas se a estrutura da planilha tiver sido alterada.</p>
+          <div class="model-row">
+            <label class="btn btn-secondary" for="modelInput">Selecionar Excel modelo</label>
+            <input type="file" id="modelInput" accept=".xlsx" hidden />
+            <span id="modelFileName" class="model-filename">Nenhum (usando modelo padrão embutido)</span>
+            <button type="button" id="resetModelBtn" class="btn btn-link">usar padrão</button>
+          </div>
+          <div id="modelStatus" class="model-status"></div>
+        </div>
+
+        <div class="adv-block">
+          <h3>Reconhecimento de CD (rota → origem)</h3>
+          <p class="card-hint">
+            O CD de origem de cada rota é determinado automaticamente, nesta ordem: (1) correspondência exata da
+            rota na Base de CDs; (2) prefixo da rota aprendido a partir da Base de CDs (ex: rotas "ON..." →
+            CDFT), do mais específico ao mais genérico; (3) quando o histórico do prefixo for ambíguo, o sistema
+            <strong>não escolhe silenciosamente</strong> — sinaliza o conflito na validação. Isso não é mais
+            configurável manualmente aqui: quanto mais planilhas de programação você importar em
+            <strong>Base de CDs</strong>, mais preciso fica o reconhecimento. Veja a tabela de prefixos aprendidos
+            na aba <strong>Inteligência / Histórico</strong>.
+          </p>
+          <div class="fallback-row">
+            <label for="origemFallback">Origem usada apenas quando não há nenhuma evidência (rota nem prefixo conhecidos):</label>
+            <input type="text" id="origemFallback" value="CDFT" maxlength="6" />
+          </div>
+        </div>
+
+        <div class="adv-block">
+          <h3>Limitações conhecidas</h3>
+          <ul class="limitations-list">
+            <li><strong>HORA CARREGAMENTO:</strong> o sistema usa o horário impresso na linha "Carregamento: N.F HH:MM" de cada bloco de rota do PDF. Em amostras de teste, observou-se que parte das rotas aparece no Excel de referência com um horário diferente do impresso (provavelmente um ajuste manual de janela de doca feito após a importação). A aba Inteligência / Histórico pode ajudar a identificar o padrão real por rota conforme mais dados forem importados.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <main class="container" id="pageBase" hidden>
+
+    <section class="card">
+      <h2 class="card-title">Base de CDs e Nomenclaturas</h2>
+      <p class="card-hint">
+        Importe planilhas de programação de outros CDs para que o sistema aprenda automaticamente
+        quais nomenclaturas de rota pertencem a cada centro de distribuição. Essa base é usada para
+        preencher a coluna ORIGEM ao processar um PDF — sem precisar cadastrar rota por rota no código.
+      </p>
+      <div class="base-indicators">
+        <div class="summary-item"><span class="summary-value" id="baseCdCount">0</span><span class="summary-label">CDs cadastrados</span></div>
+        <div class="summary-item"><span class="summary-value" id="baseNomenCount">0</span><span class="summary-label">Nomenclaturas cadastradas</span></div>
+        <div class="summary-item"><span class="summary-value" id="baseConflictCount">0</span><span class="summary-label">Em conflito</span></div>
+        <div class="summary-item base-updated-item"><span class="summary-value base-updated-value" id="baseLastUpdate">—</span><span class="summary-label">Última atualização</span></div>
+      </div>
+      <div class="base-actions">
+        <button type="button" id="btnImportCd" class="btn btn-primary">+ Importar programação de um CD</button>
+        <button type="button" id="btnAddCdManual" class="btn btn-secondary">+ Adicionar CD</button>
+        <button type="button" id="btnExportBase" class="btn btn-secondary">Exportar base</button>
+        <button type="button" id="btnImportBase" class="btn btn-secondary">Importar base (backup)</button>
+        <input type="file" id="importCdInput" accept=".xlsx" multiple hidden />
+        <input type="file" id="importBaseInput" accept=".json" hidden />
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="base-filter-row">
+        <input type="search" id="baseSearch" class="base-search" placeholder="Pesquisar nomenclatura ou CD..." />
+        <select id="baseCdFilter" class="base-cd-filter">
+          <option value="">Todos os CDs</option>
+        </select>
+      </div>
+      <div class="base-table-wrap">
+        <table class="base-table">
+          <thead>
+            <tr>
+              <th>Nomenclatura</th>
+              <th>CD de Origem</th>
+              <th>Status</th>
+              <th>Data de Cadastro</th>
+              <th>Última Atualização</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="baseTableBody"></tbody>
+        </table>
+        <div id="baseEmptyState" class="base-empty-state">
+          Nenhuma nomenclatura cadastrada ainda. Clique em "Importar programação de um CD" para começar.
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <main class="container" id="pageIntel" hidden>
+
+    <section class="card">
+      <h2 class="card-title">Inteligência / Histórico</h2>
+      <p class="card-hint">
+        Cada PDF processado e cada planilha rica importada na Base de CDs alimentam este histórico.
+        Ele é usado para sugerir horários de carregamento quando o PDF não os traz explicitamente e para
+        decidir quando criar automaticamente uma linha de retorno ao CD. O backup da aba "Base de CDs"
+        inclui todo este histórico.
+      </p>
+      <div class="base-indicators intel-indicators">
+        <div class="summary-item"><span class="summary-value" id="intelHistCount">0</span><span class="summary-label">Registros históricos</span></div>
+        <div class="summary-item"><span class="summary-value" id="intelCdCount">0</span><span class="summary-label">CDs conhecidos</span></div>
+        <div class="summary-item"><span class="summary-value" id="intelNomenCount">0</span><span class="summary-label">Nomenclaturas conhecidas</span></div>
+        <div class="summary-item"><span class="summary-value" id="intelRotaCount">0</span><span class="summary-label">Rotas conhecidas</span></div>
+        <div class="summary-item"><span class="summary-value" id="intelCarregPatterns">0</span><span class="summary-label">Padrões de carregamento</span></div>
+        <div class="summary-item"><span class="summary-value" id="intelRetornoPatterns">0</span><span class="summary-label">Padrões de retorno</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Pesquisar rota</h3>
+      <input type="search" id="intelSearch" class="base-search" placeholder="Ex: SP332M" />
+      <div id="intelSearchResult" class="intel-search-result"></div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Prefixos de rota aprendidos</h3>
+      <p class="card-hint">
+        Calculado automaticamente a partir da Base de CDs (não editável diretamente — importe planilhas de
+        programação para ensinar o sistema). Quando um prefixo aparece com mais de um CD sem uma maioria clara,
+        ele é marcado como conflito e o sistema não escolhe um CD sozinho.
+      </p>
+      <table class="origem-table">
+        <thead><tr><th>Prefixo</th><th>CD</th><th>Ocorrências</th><th>Confiança</th></tr></thead>
+        <tbody id="prefixTableBody"></tbody>
+      </table>
+      <div id="prefixTableEmpty" class="intel-empty" hidden>Nenhum prefixo aprendido ainda — importe programações de CDs na aba "Base de CDs".</div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Padrões de Tipo de Veículo → Operação</h3>
+      <p class="card-hint">
+        O PDF não classifica a operação diretamente — o sistema reconhece pelo campo "Tipo de Veículo"
+        (ex: <code>MBR-3/4-FT</code>). A tabela abaixo é a base aprendida/editável dessa classificação;
+        ajuste ou adicione padrões conforme novos tipos de veículo aparecerem.
+      </p>
+      <table class="origem-table">
+        <thead><tr><th>Padrão (prefixo do Tipo de Veículo)</th><th>Operação</th><th></th></tr></thead>
+        <tbody id="vehicleRulesBody"></tbody>
+      </table>
+      <button type="button" id="addVehicleRuleRow" class="btn-link">+ adicionar padrão</button>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Processamento 100% local no navegador — nenhum arquivo é enviado a servidores externos.</p>
+  </footer>
+
+  <!-- Modal generico (reutilizado para importacao, conflitos, edicao e confirmacoes) -->
+  <div id="modalOverlay" class="modal-overlay" hidden>
+    <div class="modal-dialog" id="modalDialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 id="modalTitle"></h3>
+        <button type="button" class="btn-icon" id="modalCloseBtn" title="Fechar">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+
+<!-- ExcelJS (biblioteca de leitura/escrita de .xlsx com suporte a formulas reais) -->
+<script src="vendor/exceljs.min.js"></script>
+
+<!-- Logica de extracao do PDF, normalizacao e geracao do Excel -->
+<script src="js/core-logic.js"></script>
+
+<!-- Persistencia local (IndexedDB) da Base de CDs e Nomenclaturas -->
+<script src="js/db.js"></script>
+
+<!-- Dados iniciais da Base de CDs (carregados automaticamente na primeira abertura) -->
+<script src="data/backup_data.js"></script>
+
+<!-- Interface e orquestracao -->
+<script src="js/app.js"></script>
+
+</body>
+</html>
