@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Control Tower | Gerador de Programação</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark">MB</div>
+        <div>
+          <h1>Control Tower</h1>
+          <p class="subtitle">Gerador de Programação</p>
+        </div>
+      </div>
+      <nav class="tabs">
+        <button type="button" class="tab-btn active" id="tabProcessarBtn" data-tab="processar">Processar PDF</button>
+        <button type="button" class="tab-btn" id="tabConfigBtn" data-tab="config">Configurações</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" id="pageProcessar">
+
+    <section class="card">
+      <h2 class="card-title"><span class="step-num">1</span> Programação (PDF)</h2>
+
+      <div id="dropZone" class="dropzone" tabindex="0" role="button" aria-label="Selecionar arquivo PDF">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="drop-title">Arraste o PDF aqui</p>
+        <p class="drop-sub">ou <span class="link-like">selecionar PDF</span></p>
+        <input type="file" id="pdfInput" accept="application/pdf,.pdf" hidden />
+      </div>
+
+      <div id="fileInfo" class="file-info" hidden>
+        <div class="file-info-icon">PDF</div>
+        <div class="file-info-main">
+          <div id="fileName" class="file-info-name"></div>
+          <div id="fileSize" class="file-info-size"></div>
+        </div>
+        <button type="button" id="removeFileBtn" class="btn-icon" title="Remover arquivo">&times;</button>
+      </div>
+
+      <button type="button" id="btnProcessar" class="btn btn-primary" disabled>Processar programação</button>
+
+      <div id="progressSection" class="progress-section" hidden>
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        <div id="progressStatus" class="progress-status">Processando PDF...</div>
+        <div id="progressDetail" class="progress-detail"></div>
+      </div>
+    </section>
+
+    <section id="summarySection" class="card" hidden>
+      <h2 class="card-title">Resumo do processamento</h2>
+      <div class="summary-grid">
+        <div class="summary-item"><span class="summary-value" id="sumPages">0</span><span class="summary-label">Páginas processadas</span></div>
+        <div class="summary-item"><span class="summary-value" id="sumRecords">0</span><span class="summary-label">Registros encontrados</span></div>
+        <div class="summary-item summary-ok"><span class="summary-value" id="sumValid">0</span><span class="summary-label">Registros válidos</span></div>
+        <div class="summary-item summary-warn"><span class="summary-value" id="sumInvalid">0</span><span class="summary-label">Com inconsistências</span></div>
+        <div class="summary-item"><span class="summary-value" id="sumWarnings">0</span><span class="summary-label">Avisos</span></div>
+        <div class="summary-item summary-auto"><span class="summary-value" id="sumAutoReturns">0</span><span class="summary-label">Retornos criados</span></div>
+      </div>
+    </section>
+
+    <section id="issuesSection" class="card" hidden>
+      <h2 class="card-title">Validação</h2>
+      <div id="issuesList" class="issues-list"></div>
+    </section>
+
+    <section id="autoReturnSection" class="card" hidden>
+      <h2 class="card-title">Linhas de retorno criadas automaticamente</h2>
+      <p class="card-hint">
+        Rotas cuja transportadora (tabela de referência, ver aba <strong>Configurações</strong>) é elegível para
+        retorno e que possuem evidência histórica de retorno ao CD. Essas linhas <strong>não vêm do PDF</strong> —
+        foram inferidas a partir do histórico acumulado. Confira o motivo de cada uma antes de gerar o Excel.
+      </p>
+      <div id="autoReturnList" class="issues-list"></div>
+    </section>
+
+    <section id="genSection" class="card" hidden>
+      <h2 class="card-title"><span class="step-num">2</span> Gerar Excel</h2>
+      <p class="card-hint">O sistema irá preencher o modelo de Excel preservando integralmente colunas, formatação e fórmulas — as colunas calculadas continuarão sendo fórmulas reais do Excel.</p>
+      <button type="button" id="btnGerar" class="btn btn-primary" disabled>Gerar Excel</button>
+      <div id="genStatus" class="gen-status" hidden></div>
+      <div id="downloadSection" class="download-section" hidden>
+        <div class="download-filename" id="downloadFileName"></div>
+        <button type="button" id="downloadBtn" class="btn btn-success">Baixar Excel</button>
+      </div>
+    </section>
+
+  </main>
+
+  <main class="container" id="pageConfig" hidden>
+
+    <section class="card">
+      <h2 class="card-title">Modelo de Excel</h2>
+      <p class="card-hint">Por padrão o sistema usa o modelo oficial já incorporado. Envie um arquivo apenas se a estrutura da planilha tiver sido alterada.</p>
+      <div class="model-row">
+        <label class="btn btn-secondary" for="modelInput">Selecionar Excel modelo</label>
+        <input type="file" id="modelInput" accept=".xlsx" hidden />
+        <span id="modelFileName" class="model-filename">Nenhum (usando modelo padrão embutido)</span>
+        <button type="button" id="resetModelBtn" class="btn btn-link">usar padrão</button>
+      </div>
+      <div id="modelStatus" class="model-status"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Origem e transportadora (rota → CD)</h2>
+      <p class="card-hint">
+        O CD de origem e a transportadora de cada rota vêm exclusivamente da tabela de referência abaixo
+        (prefixo alfabético da rota — ex: <code>BA460M</code> → prefixo <code>BA</code>). O sistema não lê mais
+        o campo "Transportadora" do PDF para isso. A transportadora é usada apenas para decidir quais rotas
+        são elegíveis à criação automática de linha de retorno ao CD.
+      </p>
+      <div class="fallback-row">
+        <label for="origemFallback">Origem usada apenas quando o prefixo da rota não consta na tabela:</label>
+        <input type="text" id="origemFallback" value="CDFT" maxlength="6" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Tabela de referência: Prefixo × CD × Transportadora</h3>
+      <p class="card-hint">
+        Não é editável por aqui — para atualizar, substitua o conteúdo de
+        <code>data/prefixo_cd_transportadora.js</code> por uma nova planilha com as mesmas 3 colunas.
+      </p>
+      <input type="search" id="prefixTableSearch" class="base-search" placeholder="Pesquisar prefixo, CD ou transportadora..." />
+      <div class="base-table-wrap ref-table-scroll">
+        <table class="origem-table">
+          <thead><tr><th>Prefixo</th><th>CD de origem</th><th>Transportadora</th></tr></thead>
+          <tbody id="prefixRefTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Limitações conhecidas</h3>
+      <ul class="limitations-list">
+        <li><strong>Data e hora de carregamento:</strong> vêm exclusivamente da linha "Carregamento: &lt;dia&gt; HH:MM" de cada bloco do PDF — o dia (2.F a 6.F, Sáb, Dom) é convertido para a data real a partir da Data de Faturamento impressa no topo do documento. Nenhuma outra fonte (histórico, planilha antiga) é usada para esse campo.</li>
+        <li><strong>Retorno automático ao CD:</strong> só é criado para rotas cuja transportadora (tabela acima) seja elegível e que já possuam evidência histórica de retorno. Rotas novas, ainda sem histórico, não recebem retorno automático — adicione a linha manualmente se necessário.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Processamento 100% local no navegador nenhum arquivo é enviado a servidores externos.</p>
+  </footer>
+
+<!-- ExcelJS (biblioteca de leitura/escrita de .xlsx com suporte a formulas reais) -->
+<script src="vendor/exceljs.min.js"></script>
+
+<!-- Tabela de referencia Prefixo x CD x Transportadora (fonte unica de origem/transportadora) -->
+<script src="data/prefixo_cd_transportadora.js"></script>
+
+<!-- Logica de extracao do PDF, normalizacao e geracao do Excel -->
+<script src="js/core-logic.js"></script>
+
+<!-- Persistencia local (IndexedDB) do historico de carregamento/retorno -->
+<script src="js/db.js"></script>
+
+<!-- Carga inicial do historico (apenas o array "historico"; usado uma unica vez) -->
+<script src="data/backup_data.js"></script>
+
+<!-- Interface e orquestracao -->
+<script src="js/app.js"></script>
+
+</body>
+</html>
