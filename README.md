@@ -10,21 +10,6 @@ Roda inteiramente no navegador, nenhum arquivo é enviado a servidores externos.
 - Cria automaticamente *linhas de retorno ao CD* para rotas elegíveis, com base no histórico acumulado
 - Gera o Excel final preservando fórmulas e formatação do modelo original, *dividido em uma planilha por grupo de CD*, nomeada com a semana do faturamento (ex: Tbl_DistrMCD_ES_RJ_Sem35.xlsx)
 
-## Estrutura
-
-site/
-├── index.html
-├── css/style.css
-├── js/
-│   ├── app.js          # interface e orquestração
-│   ├── core-logic.js   # extração do PDF, validação, geração do Excel
-│   └── db.js           # histórico local (IndexedDB)
-├── data/
-│   ├── prefixo_cd_transportadora.js  # tabela de referência (editável)
-│   ├── modelo-excel.xlsx             # modelo oficial
-│   └── backup_data.js                # carga inicial de histórico
-└── vendor/                           # ExcelJS e PDF.js
-
 ## Configuração
 
 Fica na aba *Configurações* do site, ou direto em data/prefixo_cd_transportadora.js:
