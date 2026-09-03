@@ -23,10 +23,12 @@
           <p class="subtitle">Gerador de Programação</p>
         </div>
       </div>
-      <nav class="tabs">
-        <button type="button" class="tab-btn active" id="tabProcessarBtn" data-tab="processar">Processar PDF</button>
-        <button type="button" class="tab-btn" id="tabConfigBtn" data-tab="config">Configurações</button>
-      </nav>
+      <button type="button" id="btnSettings" class="btn-gear" title="Configurações" aria-label="Abrir configurações">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -126,7 +128,7 @@
       </p>
       <div class="fallback-row">
         <label for="origemFallback">Origem usada apenas quando o prefixo da rota não consta na tabela:</label>
-        <input type="text" id="origemFallback" value="CDFT" maxlength="6" />
+        <input type="text" id="origemFallback" value="NLOC" maxlength="6" />
       </div>
     </section>
 
@@ -148,9 +150,28 @@
     </section>
 
     <section class="card">
+      <h3 class="card-title">Regra de carregamento por nomenclatura (DTHCARREG)</h3>
+      <p class="card-hint">
+        Por padrão, a data e hora de carregamento vêm da linha "Carregamento: &lt;dia&gt; HH:MM" de cada bloco do
+        PDF (a "preliminar"). Para as combinações de <strong>CD FATURAMENTO</strong> (campo "CD: XX" do PDF) ×
+        <strong>nomenclatura da rota</strong> listadas abaixo, o sistema ignora a preliminar e calcula a
+        DTHCARREG a partir da <strong>Data de Entrega</strong> da própria rota (dia(s) antes, no horário
+        indicado). Combinações que não constam aqui seguem sempre a data de carregamento do PDF. Não é editável
+        por aqui — para atualizar, edite <code>data/regra_carregamento.js</code>.
+      </p>
+      <input type="search" id="regraCarregTableSearch" class="base-search" placeholder="Pesquisar CD faturamento, nomenclatura ou regra..." />
+      <div class="base-table-wrap ref-table-scroll">
+        <table class="origem-table">
+          <thead><tr><th>CD Faturamento</th><th>Nomenclatura</th><th>Regra aplicada</th></tr></thead>
+          <tbody id="regraCarregTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
       <h3 class="card-title">Limitações conhecidas</h3>
       <ul class="limitations-list">
-        <li><strong>Data e hora de carregamento:</strong> vêm exclusivamente da linha "Carregamento: &lt;dia&gt; HH:MM" de cada bloco do PDF — o dia (2.F a 6.F, Sáb, Dom) é convertido para a data real a partir da Data de Faturamento impressa no topo do documento. Nenhuma outra fonte (histórico, planilha antiga) é usada para esse campo.</li>
+        <li><strong>Data e hora de carregamento:</strong> por padrão vêm da linha "Carregamento: &lt;dia&gt; HH:MM" de cada bloco do PDF — o dia (2.F a 6.F, Sáb, Dom) é convertido para a data real a partir da Data de Faturamento impressa no topo do documento. As combinações de CD faturamento × nomenclatura cadastradas na tabela acima substituem esse valor pelo cálculo a partir da Data de Entrega; as demais mantêm a preliminar do PDF.</li>
         <li><strong>Retorno automático ao CD:</strong> só é criado para rotas cuja transportadora (tabela acima) seja elegível e que já possuam evidência histórica de retorno. Rotas novas, ainda sem histórico, não recebem retorno automático — adicione a linha manualmente se necessário.</li>
       </ul>
     </section>
@@ -166,6 +187,9 @@
 
 <!-- Tabela de referencia Prefixo x CD x Transportadora (fonte unica de origem/transportadora) -->
 <script src="data/prefixo_cd_transportadora.js"></script>
+
+<!-- Regras de definicao da DTHCARREG por CD faturamento x nomenclatura da rota -->
+<script src="data/regra_carregamento.js"></script>
 
 <!-- Logica de extracao do PDF, normalizacao e geracao do Excel -->
 <script src="js/core-logic.js"></script>

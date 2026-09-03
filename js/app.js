@@ -15,7 +15,7 @@ const state = {
   pdfjsLib: null,
   pdfFile: null,
   modelFile: null, // ArrayBuffer custom, se o usuario enviar um modelo proprio
-  origemFallback: 'CDFT',
+  origemFallback: 'NLOC',
   records: [],
   warnings: [],
   errors: [],
@@ -56,20 +56,19 @@ function ensureLibsLoaded() {
 }
 
 /* ============================================================================
- * TABS
+ * NAVEGACAO: Processar PDF <-> Configuracoes (botao de engrenagem)
  * ==========================================================================*/
 function initTabs() {
-  const tabs = [
-    { btn: $('#tabProcessarBtn'), page: $('#pageProcessar') },
-    { btn: $('#tabConfigBtn'), page: $('#pageConfig') }
-  ];
-  tabs.forEach(t => {
-    t.btn.addEventListener('click', () => {
-      tabs.forEach(o => {
-        o.btn.classList.toggle('active', o === t);
-        o.page.hidden = o !== t;
-      });
-    });
+  const pageProcessar = $('#pageProcessar');
+  const pageConfig = $('#pageConfig');
+  const btnSettings = $('#btnSettings');
+
+  btnSettings.addEventListener('click', () => {
+    const abrirConfig = pageConfig.hidden;
+    pageConfig.hidden = !abrirConfig;
+    pageProcessar.hidden = abrirConfig;
+    btnSettings.classList.toggle('active', abrirConfig);
+    btnSettings.title = abrirConfig ? 'Voltar para Processar PDF' : 'Configurações';
   });
 }
 
@@ -375,7 +374,7 @@ function initConfigPage() {
   try { savedFallback = localStorage.getItem('ct_origem_fallback'); } catch (e) {}
   if (savedFallback) { state.origemFallback = savedFallback; fallbackInput.value = savedFallback; }
   fallbackInput.addEventListener('change', () => {
-    const v = fallbackInput.value.trim().toUpperCase() || 'CDFT';
+    const v = fallbackInput.value.trim().toUpperCase() || 'NLOC';
     fallbackInput.value = v;
     state.origemFallback = v;
     try { localStorage.setItem('ct_origem_fallback', v); } catch (e) {}
@@ -383,6 +382,9 @@ function initConfigPage() {
 
   renderPrefixRefTable();
   $('#prefixTableSearch').addEventListener('input', (ev) => renderPrefixRefTable(ev.target.value));
+
+  renderRegraCarregamentoTable();
+  $('#regraCarregTableSearch').addEventListener('input', (ev) => renderRegraCarregamentoTable(ev.target.value));
 }
 
 function renderPrefixRefTable(filter) {
@@ -394,6 +396,30 @@ function renderPrefixRefTable(filter) {
 
   tbody.innerHTML = rows.map(e => `<tr><td>${escapeHtml(e.prefixo)}</td><td>${escapeHtml(e.cd)}</td><td>${escapeHtml(e.transportadora)}</td><td>${escapeHtml(e.planilha)}</td></tr>`).join('')
     || `<tr><td colspan="4" style="text-align:center;color:var(--text-dim);">Nenhum resultado.</td></tr>`;
+}
+
+// Descreve, em texto legivel, a regra de DTHCARREG de uma entrada de
+// REGRAS_CARREGAMENTO (ver data/regra_carregamento.js).
+function describeRegraCarregamento(r) {
+  if (r.origemCondicional) {
+    return `Se origem = ${r.origemCondicional}: ${r.diasAntesEntrega} dia(s) antes da entrega, ${r.hora}. Caso contrário: segue preliminar do PDF.`;
+  }
+  if (r.seguePreliminar) return 'Segue preliminar do PDF (sem alteração)';
+  return `${r.diasAntesEntrega} dia${r.diasAntesEntrega === 1 ? '' : 's'} antes da entrega, ${r.hora}`;
+}
+
+function renderRegraCarregamentoTable(filter) {
+  const tbody = $('#regraCarregTableBody');
+  const f = (filter || '').trim().toUpperCase();
+
+  const rows = REGRAS_CARREGAMENTO.map(r => ({
+    fat: r.cdFat,
+    nomenclatura: r.origemCondicional ? `Qualquer (origem = ${r.origemCondicional})` : r.nomenclaturas.join(' / '),
+    regra: describeRegraCarregamento(r)
+  })).filter(row => !f || row.fat.toUpperCase().includes(f) || row.nomenclatura.toUpperCase().includes(f) || row.regra.toUpperCase().includes(f));
+
+  tbody.innerHTML = rows.map(row => `<tr><td>FAT. ${escapeHtml(row.fat)}</td><td>${escapeHtml(row.nomenclatura)}</td><td>${escapeHtml(row.regra)}</td></tr>`).join('')
+    || `<tr><td colspan="3" style="text-align:center;color:var(--text-dim);">Nenhum resultado.</td></tr>`;
 }
 
 /* ============================================================================

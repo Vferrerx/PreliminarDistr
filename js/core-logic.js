@@ -137,7 +137,7 @@ function parseBRNumber(str) {
  * embutida em data/prefixo_cd_transportadora.js. Substitui integralmente o
  * antigo mecanismo de "aprendizado" a partir de planilhas importadas.
  * ==========================================================================*/
-const DEFAULT_ORIGEM_FALLBACK = 'CDFT';
+const DEFAULT_ORIGEM_FALLBACK = 'NLOC';
 
 // Carrega a tabela global de forma preguicosa (funciona tanto se o arquivo de
 // dados for carregado antes ou depois deste, e tambem em testes Node onde a
@@ -183,6 +183,74 @@ function resolveOrigemForRota(rota, fallback) {
     return { origem: info.cd, transportadora: info.transportadora, planilha: info.planilha, fonte: 'tabela_prefixo', prefixo: info.prefixo };
   }
   return { origem: fallback, transportadora: null, planilha: PLANILHA_FALLBACK, fonte: 'padrao', prefixo: derivePrefixFromRota(rota) };
+}
+
+/* ============================================================================
+ * REGRA DE CARREGAMENTO POR NOMENCLATURA (DTHCARREG) - fonte unica: tabela de
+ * regras em data/regra_carregamento.js (global REGRAS_CARREGAMENTO). Define,
+ * conforme CD FATURAMENTO ("CD: XX" do PDF) + nomenclatura da rota (prefixo
+ * alfabetico, ou padrao com curinga "*" quando a regra depende de um trecho
+ * especifico do codigo da rota, ex: "GO*96F"), quantos dias antes da DATA DE
+ * ENTREGA e em que horario a rota deve carregar - substituindo a DTHCARREG
+ * "preliminar" lida do PDF. Quando nada casa, a preliminar do PDF e mantida.
+ * ==========================================================================*/
+let _regrasCarregamentoCache = null;
+function getRegrasCarregamento() {
+  if (!_regrasCarregamentoCache) {
+    _regrasCarregamentoCache = (typeof REGRAS_CARREGAMENTO !== 'undefined' && REGRAS_CARREGAMENTO)
+      ? REGRAS_CARREGAMENTO
+      : (typeof global !== 'undefined' && global.REGRAS_CARREGAMENTO) || [];
+  }
+  return _regrasCarregamentoCache;
+}
+// Uso exclusivo de testes: permite forcar a releitura da tabela.
+function _resetRegrasCarregamentoCacheForTests() { _regrasCarregamentoCache = null; }
+
+// Converte um padrao com curinga "*" (ex: "GO*96F") numa RegExp ancorada no
+// inicio, comparando com o codigo COMPLETO da rota (case-insensitive).
+function wildcardPatternToRegex(pattern) {
+  const escaped = String(pattern).toUpperCase()
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*');
+  return new RegExp('^' + escaped);
+}
+
+// Procura, dentre as regras do mesmo CD FATURAMENTO (exceto a regra especial
+// de FAT. FT, condicional por origem), a que casa com a rota informada. Regras
+// com padrao curinga (mais especificas, ex: "GO*96F") tem prioridade sobre
+// regras de prefixo simples (ex: "GO"), independente da ordem no array.
+function findRegraCarregamentoPorNomenclatura(cdFatNorm, rota) {
+  const rotaUpper = String(rota || '').toUpperCase();
+  const prefixo = derivePrefixFromRota(rota);
+  const candidatas = getRegrasCarregamento().filter(r => r.cdFat === cdFatNorm && !r.origemCondicional);
+
+  const porCuringa = candidatas.find(r => Array.isArray(r.nomenclaturas) &&
+    r.nomenclaturas.some(n => n.includes('*') && wildcardPatternToRegex(n).test(rotaUpper)));
+  if (porCuringa) return porCuringa;
+
+  return candidatas.find(r => Array.isArray(r.nomenclaturas) &&
+    r.nomenclaturas.some(n => !n.includes('*') && n.toUpperCase() === prefixo)) || null;
+}
+
+// Resolucao definitiva da regra de DTHCARREG para uma rota: retorna
+// { diasAntesEntrega, hora } quando uma regra de override se aplica, ou null
+// quando a DTHCARREG deve seguir a preliminar do PDF (nomenclatura/CD
+// FATURAMENTO nao consta na relacao, ou a regra encontrada e "seguePreliminar").
+function resolveRegraCarregamento(rota, cdFaturamento, origem) {
+  const cdFatNorm = String(cdFaturamento || '').toUpperCase().trim();
+  if (!cdFatNorm) return null;
+
+  if (cdFatNorm === 'FT') {
+    const regraFt = getRegrasCarregamento().find(r => r.cdFat === 'FT' && r.origemCondicional);
+    if (regraFt && String(origem || '').toUpperCase() === String(regraFt.origemCondicional).toUpperCase()) {
+      return { diasAntesEntrega: regraFt.diasAntesEntrega, hora: regraFt.hora };
+    }
+    return null;
+  }
+
+  const regra = findRegraCarregamentoPorNomenclatura(cdFatNorm, rota);
+  if (!regra || regra.seguePreliminar) return null;
+  return { diasAntesEntrega: regra.diasAntesEntrega, hora: regra.hora };
 }
 
 /* ============================================================================
@@ -357,6 +425,14 @@ function normalizeAndValidate(rawResult, options) {
     if (dowDigit == null) rowErrors.push(`Dia da semana de entrega invalido: "${rec.diaSemanaEntrega}"`);
     if (!hEntrega) rowErrors.push(`Hora de entrega invalida: "${rec.horaEntregaStr}"`);
 
+    const origemInfo = resolveOrigemForRota(rec.rota, opts.origemFallback);
+    const origem = origemInfo.origem;
+    const tipoOperacao = `DISTR ${origem}`;
+
+    if (origemInfo.fonte === 'padrao') {
+      warnings.push({ type: 'prefixo_nao_cadastrado', rota: rec.rota, loja: rec.loja, detail: `Prefixo "${origemInfo.prefixo}" (rota "${rec.rota}") nao consta na tabela de referencia de CD/transportadora; usando origem padrao (${origem}). Atualize a tabela em "data/prefixo_cd_transportadora.js" se este prefixo for valido.` });
+    }
+
     let dataFaturamento = null, dataEntrega = null, dataCarregamento = null;
     if (fat) {
       dataFaturamento = makeUTCDate(fat.year, fat.month, fat.day);
@@ -371,7 +447,20 @@ function normalizeAndValidate(rawResult, options) {
       }
     }
 
-    const hCarreg = rec.carregHour ? parseHourMinute(rec.carregHour) : null;
+    let hCarreg = rec.carregHour ? parseHourMinute(rec.carregHour) : null;
+    let carregamentoFonte = 'preliminar_pdf';
+
+    // Regra de nomenclatura (DTHCARREG) - so substitui a preliminar do PDF
+    // quando a DATA DE ENTREGA foi determinada e uma regra casa com esta rota
+    // (ver data/regra_carregamento.js). Caso contrario, mantem a preliminar.
+    if (dataEntrega) {
+      const regra = resolveRegraCarregamento(rec.rota, rec.cdFaturamento, origem);
+      if (regra) {
+        dataCarregamento = new Date(dataEntrega.getTime() - (regra.diasAntesEntrega || 0) * 86400000);
+        hCarreg = parseHourMinute(regra.hora);
+        carregamentoFonte = 'regra_nomenclatura';
+      }
+    }
 
     // consistencia: total = congelado + resfriado + seco (tolerancia de 1 unidade por arredondamento)
     if (rec.caixasTotal != null && rec.caixasCongelado != null && rec.caixasResfriado != null && rec.caixasSeco != null) {
@@ -379,14 +468,6 @@ function normalizeAndValidate(rawResult, options) {
       if (Math.abs(soma - rec.caixasTotal) > 1) {
         warnings.push({ type: 'inconsistencia_caixas', rota: rec.rota, loja: rec.loja, detail: `Total informado (${rec.caixasTotal}) difere da soma das categorias (${soma}).` });
       }
-    }
-
-    const origemInfo = resolveOrigemForRota(rec.rota, opts.origemFallback);
-    const origem = origemInfo.origem;
-    const tipoOperacao = `DISTR ${origem}`;
-
-    if (origemInfo.fonte === 'padrao') {
-      warnings.push({ type: 'prefixo_nao_cadastrado', rota: rec.rota, loja: rec.loja, detail: `Prefixo "${origemInfo.prefixo}" (rota "${rec.rota}") nao consta na tabela de referencia de CD/transportadora; usando origem padrao (${origem}). Atualize a tabela em "data/prefixo_cd_transportadora.js" se este prefixo for valido.` });
     }
 
     const key = `${rec.rota}|${rec.loja}|${rec.faturamentoStr}`;
@@ -410,6 +491,7 @@ function normalizeAndValidate(rawResult, options) {
       loja: rec.loja,
       dataCarregamento,
       horaCarregamento: hCarreg,
+      carregamentoFonte,
       dataEntrega,
       horaEntrega: hEntrega,
       caixas: rec.caixasTotal != null ? Math.round(rec.caixasTotal) : null,
@@ -849,6 +931,8 @@ if (typeof module !== 'undefined') {
     brDowToJsDow, parseBRDateShortYear, makeUTCDate, resolveWeekdayDate, parseHourMinute, parseDiaSemanaToken, parseDiaHoraToken,
     parseBRNumber, resolveOrigemForRota, resolveOrigemPorPrefixo, DEFAULT_ORIGEM_FALLBACK, PLANILHA_FALLBACK,
     derivePrefixFromRota, getPrefixoLookupMap, _resetPrefixoLookupMapForTests,
+    resolveRegraCarregamento, findRegraCarregamentoPorNomenclatura, wildcardPatternToRegex,
+    getRegrasCarregamento, _resetRegrasCarregamentoCacheForTests,
     bucketNumericItemsByCategoryX, resolveCategoryValues,
     extractPdfRecords, normalizeAndValidate,
     makeExcelTimeDate, shiftFormula, resolveMasterFormula, sortRecordsForExcel, buildExcelWorkbook,
